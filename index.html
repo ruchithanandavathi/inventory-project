@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Inventory System</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+body {font-family: Arial; margin:0; background:#f4f6f9;}
+header {background:#003366; color:white; padding:10px; text-align:center;}
+.login-container {display:flex; justify-content:center; align-items:center; height:80vh;}
+.login-box {background:white; padding:20px; border-radius:10px; width:300px;}
+input,select,button {width:100%; padding:10px; margin:8px 0;}
+button {background:#0059b3; color:white; border:none;}
+.dashboard {display:none; padding:20px;}
+.section {display:none; background:white; padding:15px; margin-top:15px;}
+table {width:100%; border-collapse:collapse;}
+th,td {padding:8px; border:1px solid #ddd;}
+th {background:#003366; color:white;}
+</style>
+</head>
+
+<body>
+
+<header>Inventory System</header>
+
+<!-- LOGIN -->
+<div class="login-container" id="loginPage">
+<div class="login-box">
+<h2>Login</h2>
+
+<select id="role">
+<option value="management">Management</option>
+<option value="manager">Manager</option>
+<option value="student">Student</option>
+</select>
+
+<input id="username" placeholder="Username">
+<input id="password" type="password" placeholder="Password">
+
+<button onclick="login()">Login</button>
+</div>
+</div>
+
+<!-- DASHBOARD -->
+<div id="dashboard" class="dashboard">
+
+<h2 id="roleTitle"></h2>
+
+<button onclick="showSection('updateStock')">Update Stock</button>
+<button onclick="showSection('billing')">Sell</button>
+<button onclick="showSection('stockDetails')">Stock</button>
+<button onclick="showSection('salesDetails')">Sales</button>
+
+<!-- UPDATE STOCK -->
+<div id="updateStock" class="section">
+<h3>Add Stock</h3>
+<input id="u_name" placeholder="Item Name">
+<input id="u_qty" placeholder="Qty">
+<input id="u_price" placeholder="Price">
+<input id="u_dist" placeholder="Distributor">
+<input id="u_date" type="date">
+<button onclick="updateStock()">Save</button>
+</div>
+
+<!-- BILLING -->
+<div id="billing" class="section">
+<h3>Sell Item</h3>
+<input id="b_id" placeholder="Item ID">
+<input id="b_qty" placeholder="Quantity">
+<input id="b_usn" placeholder="USN">
+<button onclick="sellItem()">Sell</button>
+</div>
+
+<!-- STOCK -->
+<div id="stockDetails" class="section">
+<h3>Stock</h3>
+<table id="stockTable">
+<thead>
+<tr>
+<th>ID</th><th>Name</th><th>Qty</th><th>Price</th><th>Dist</th><th>Date</th>
+</tr>
+</thead>
+<tbody></tbody>
+</table>
+<canvas id="stockChart"></canvas>
+</div>
+
+<!-- SALES -->
+<div id="salesDetails" class="section">
+<h3>Sales</h3>
+<table id="salesTable">
+<thead>
+<tr>
+<th>ID</th><th>Name</th><th>Qty</th><th>Price</th><th>Dist</th><th>Date</th>
+</tr>
+</thead>
+<tbody></tbody>
+</table>
+<canvas id="salesChart"></canvas>
+</div>
+
+</div>
+
+<script>
+
+// LOGIN (MongoDB)
+function login(){
+fetch("http://localhost:3000/login", {
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({
+username:username.value,
+password:password.value,
+role:role.value
+})
+})
+.then(res=>res.json())
+.then(data=>{
+
+if(data.success){
+loginPage.style.display="none";
+dashboard.style.display="block";
+roleTitle.innerText=data.role.toUpperCase()+" DASHBOARD";
+
+loadStock();
+loadSales();
+
+}else{
+alert("Invalid Login");
+}
+
+});
+}
+
+// NAV
+function showSection(id){
+document.querySelectorAll(".section").forEach(s=>s.style.display="none");
+document.getElementById(id).style.display="block";
+}
+
+// ADD STOCK
+function updateStock(){
+fetch("/addStock", {
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({
+name:u_name.value,
+qty:Number(u_qty.value),
+price:Number(u_price.value),
+dist:u_dist.value,
+date:u_date.value
+})
+})
+.then(()=>loadStock());
+}
+
+// LOAD STOCK
+function loadStock(){
+fetch("/getStock")
+.then(res=>res.json())
+.then(data=>{
+let tbody=stockTable.querySelector("tbody");
+tbody.innerHTML="";
+
+data.forEach(s=>{
+tbody.innerHTML+=`<tr>
+<td>${s._id}</td>
+<td>${s.name}</td>
+<td>${s.qty}</td>
+<td>${s.price}</td>
+<td>${s.dist}</td>
+<td>${s.date}</td>
+</tr>`;
+});
+
+drawStockChart(data);
+});
+}
+
+// SELL
+function sellItem(){
+fetch("/sell", {
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({
+id:b_id.value,
+qty:Number(b_qty.value),
+usn:b_usn.value
+})
+})
+.then(()=>{loadStock(); loadSales();});
+}
+
+// LOAD SALES
+function loadSales(){
+fetch("/getSales")
+.then(res=>res.json())
+.then(data=>{
+let tbody=salesTable.querySelector("tbody");
+tbody.innerHTML="";
+
+data.forEach(s=>{
+tbody.innerHTML+=`<tr>
+<td>${s._id}</td>
+<td>${s.name}</td>
+<td>${s.qty}</td>
+<td>${s.price}</td>
+<td>${s.dist}</td>
+<td>${s.date}</td>
+</tr>`;
+});
+
+drawSalesChart(data);
+});
+}
+
+// CHARTS
+let stockChartObj, salesChartObj;
+
+function drawStockChart(d){
+if(stockChartObj) stockChartObj.destroy();
+stockChartObj=new Chart(stockChart,{
+type:'bar',
+data:{labels:d.map(s=>s.name),datasets:[{label:"Stock",data:d.map(s=>s.qty)}]}
+});
+}
+
+function drawSalesChart(d){
+if(salesChartObj) salesChartObj.destroy();
+salesChartObj=new Chart(salesChart,{
+type:'line',
+data:{labels:d.map(s=>s.name),datasets:[{label:"Sales",data:d.map(s=>s.qty)}]}
+});
+}
+
+</script>
+
+</body>
+</html>
